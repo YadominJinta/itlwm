@@ -173,49 +173,67 @@ void itlwm::associateSSID(const char *ssid, const char *pwd)
     if (ic->ic_state != IEEE80211_S_SCAN && ic->ic_state != IEEE80211_S_INIT) {
         iwm_stop(&ic->ic_ac.ac_if);
     }
-    memset(&psk, 0, sizeof(psk));
-    memcpy(nwid.i_nwid, ssid, 32);
-    nwid.i_len = strlen((char *)nwid.i_nwid);
-    memset(ic->ic_des_essid, 0, IEEE80211_NWID_LEN);
-    ic->ic_des_esslen = nwid.i_len;
-    memcpy(ic->ic_des_essid, nwid.i_nwid, nwid.i_len);
-    if (ic->ic_des_esslen > 0) {
-        /* 'nwid' disables auto-join magic */
-        ic->ic_flags &= ~IEEE80211_F_AUTO_JOIN;
-    } else if (!TAILQ_EMPTY(&ic->ic_ess)) {
-        /* '-nwid' re-enables auto-join */
-        ic->ic_flags |= IEEE80211_F_AUTO_JOIN;
-    }
-    /* disable WPA/WEP */
-    ieee80211_disable_rsn(ic);
-    ieee80211_disable_wep(ic);
-    size_t passlen = strlen(pwd);
-    /* Parse a WPA passphrase */
-    if (passlen < 8 || passlen > 63)
-        XYLog("wpakey: passphrase must be between "
-              "8 and 63 characters");
-    if (nwid.i_len == 0)
-        XYLog("wpakey: nwid not set");
-    pbkdf2_sha1(pwd, (const uint8_t*)ssid, nwid.i_len, 4096,
-                psk.i_psk, 32);
-    psk.i_enabled = 1;
-    if (psk.i_enabled) {
-        ic->ic_flags |= IEEE80211_F_PSK;
-        memcpy(ic->ic_psk, psk.i_psk, sizeof(ic->ic_psk));
-        if (ic->ic_flags & IEEE80211_F_WEPON)
-            ieee80211_disable_wep(ic);
+    if (strlen(pwd) == 0) {
+        memcpy(nwid.i_nwid, ssid, 32);
+        nwid.i_len = strlen((char *)nwid.i_nwid);
+        memset(ic->ic_des_essid, 0, IEEE80211_NWID_LEN);
+        ic->ic_des_esslen = nwid.i_len;
+        memcpy(ic->ic_des_essid, nwid.i_nwid, nwid.i_len);
+        if (ic->ic_des_esslen > 0) {
+            /* 'nwid' disables auto-join magic */
+            ic->ic_flags &= ~IEEE80211_F_AUTO_JOIN;
+        } else if (!TAILQ_EMPTY(&ic->ic_ess)) {
+            /* '-nwid' re-enables auto-join */
+            ic->ic_flags |= IEEE80211_F_AUTO_JOIN;
+        }
+        /* disable WPA/WEP */
+        ieee80211_disable_rsn(ic);
+        ieee80211_disable_wep(ic);
     } else {
-        ic->ic_flags &= ~IEEE80211_F_PSK;
-        memset(ic->ic_psk, 0, sizeof(ic->ic_psk));
+        memset(&psk, 0, sizeof(psk));
+        memcpy(nwid.i_nwid, ssid, 32);
+        nwid.i_len = strlen((char *)nwid.i_nwid);
+        memset(ic->ic_des_essid, 0, IEEE80211_NWID_LEN);
+        ic->ic_des_esslen = nwid.i_len;
+        memcpy(ic->ic_des_essid, nwid.i_nwid, nwid.i_len);
+        if (ic->ic_des_esslen > 0) {
+            /* 'nwid' disables auto-join magic */
+            ic->ic_flags &= ~IEEE80211_F_AUTO_JOIN;
+        } else if (!TAILQ_EMPTY(&ic->ic_ess)) {
+            /* '-nwid' re-enables auto-join */
+            ic->ic_flags |= IEEE80211_F_AUTO_JOIN;
+        }
+        /* disable WPA/WEP */
+        ieee80211_disable_rsn(ic);
+        ieee80211_disable_wep(ic);
+        size_t passlen = strlen(pwd);
+        /* Parse a WPA passphrase */
+        if (passlen < 8 || passlen > 63)
+            XYLog("wpakey: passphrase must be between "
+                  "8 and 63 characters");
+        if (nwid.i_len == 0)
+            XYLog("wpakey: nwid not set");
+        pbkdf2_sha1(pwd, (const uint8_t*)ssid, nwid.i_len, 4096,
+                    psk.i_psk, 32);
+        psk.i_enabled = 1;
+        if (psk.i_enabled) {
+            ic->ic_flags |= IEEE80211_F_PSK;
+            memcpy(ic->ic_psk, psk.i_psk, sizeof(ic->ic_psk));
+            if (ic->ic_flags & IEEE80211_F_WEPON)
+                ieee80211_disable_wep(ic);
+        } else {
+            ic->ic_flags &= ~IEEE80211_F_PSK;
+            memset(ic->ic_psk, 0, sizeof(ic->ic_psk));
+        }
+        memset(&wpa, 0, sizeof(wpa));
+        ieee80211_ioctl_getwpaparms(ic, &wpa);
+        wpa.i_enabled = psk.i_enabled;
+        wpa.i_ciphers = 0;
+        wpa.i_groupcipher = 0;
+        wpa.i_protos = IEEE80211_WPA_PROTO_WPA1 | IEEE80211_WPA_PROTO_WPA2;
+        wpa.i_akms = IEEE80211_WPA_AKM_PSK | IEEE80211_WPA_AKM_8021X | IEEE80211_WPA_AKM_SHA256_PSK | IEEE80211_WPA_AKM_SHA256_8021X;
+        ieee80211_ioctl_setwpaparms(ic, &wpa);
     }
-    memset(&wpa, 0, sizeof(wpa));
-    ieee80211_ioctl_getwpaparms(ic, &wpa);
-    wpa.i_enabled = psk.i_enabled;
-    wpa.i_ciphers = 0;
-    wpa.i_groupcipher = 0;
-    wpa.i_protos = IEEE80211_WPA_PROTO_WPA1 | IEEE80211_WPA_PROTO_WPA2;
-    wpa.i_akms = IEEE80211_WPA_AKM_PSK | IEEE80211_WPA_AKM_8021X | IEEE80211_WPA_AKM_SHA256_PSK | IEEE80211_WPA_AKM_SHA256_8021X;
-    ieee80211_ioctl_setwpaparms(ic, &wpa);
     ieee80211_del_ess(ic, NULL, 0, 1);
     iwm_add_task(&com, systq, &com.init_task);
 }
@@ -281,13 +299,18 @@ bool itlwm::start(IOService *provider)
         releaseAll();
         return false;
     }
+    fWatchdogWorkLoop = IOWorkLoop::workLoop();
+    if (fWatchdogWorkLoop == NULL) {
+        releaseAll();
+        return false;
+    }
     watchdogTimer = IOTimerEventSource::timerEventSource(this, OSMemberFunctionCast(IOTimerEventSource::Action, this, &itlwm::watchdogAction));
     if (!watchdogTimer) {
         XYLog("init watchdog fail\n");
         releaseAll();
         return false;
     }
-    _fWorkloop->addEventSource(watchdogTimer);
+    fWatchdogWorkLoop->addEventSource(watchdogTimer);
     setLinkStatus(kIONetworkLinkValid);
     OSObject *wifiEntryObject = NULL;
     OSDictionary *wifiEntry = NULL;
@@ -429,11 +452,13 @@ void itlwm::releaseAll()
             _fCommandGate->release();
             _fCommandGate = NULL;
         }
-        if (watchdogTimer) {
+        if (fWatchdogWorkLoop && watchdogTimer) {
             watchdogTimer->cancelTimeout();
-            _fWorkloop->removeEventSource(watchdogTimer);
+            fWatchdogWorkLoop->removeEventSource(watchdogTimer);
             watchdogTimer->release();
             watchdogTimer = NULL;
+            fWatchdogWorkLoop->release();
+            fWatchdogWorkLoop = NULL;
         }
         _fWorkloop->release();
         _fWorkloop = NULL;
@@ -459,7 +484,6 @@ IOReturn itlwm::enable(IONetworkInterface *netif)
     ifp->if_flags |= IFF_UP;
     _fCommandGate->enable();
     iwm_activate(&com, DVACT_WAKEUP);
-    setLinkStatus(kIONetworkLinkValid | kIONetworkLinkActive, getCurrentMedium());
     watchdogTimer->setTimeoutMS(1000);
     watchdogTimer->enable();
     return kIOReturnSuccess;

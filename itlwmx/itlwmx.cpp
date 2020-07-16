@@ -192,49 +192,67 @@ void itlwmx::associateSSID(const char *ssid, const char *pwd)
     if (ic->ic_state != IEEE80211_S_SCAN && ic->ic_state != IEEE80211_S_INIT) {
         iwx_stop(&ic->ic_ac.ac_if);
     }
-    memset(&psk, 0, sizeof(psk));
-    memcpy(nwid.i_nwid, ssid, 32);
-    nwid.i_len = strlen((char *)nwid.i_nwid);
-    memset(ic->ic_des_essid, 0, IEEE80211_NWID_LEN);
-    ic->ic_des_esslen = nwid.i_len;
-    memcpy(ic->ic_des_essid, nwid.i_nwid, nwid.i_len);
-    if (ic->ic_des_esslen > 0) {
-        /* 'nwid' disables auto-join magic */
-        ic->ic_flags &= ~IEEE80211_F_AUTO_JOIN;
-    } else if (!TAILQ_EMPTY(&ic->ic_ess)) {
-        /* '-nwid' re-enables auto-join */
-        ic->ic_flags |= IEEE80211_F_AUTO_JOIN;
-    }
-    /* disable WPA/WEP */
-    ieee80211_disable_rsn(ic);
-    ieee80211_disable_wep(ic);
-    size_t passlen = strlen(pwd);
-    /* Parse a WPA passphrase */
-    if (passlen < 8 || passlen > 63)
-        XYLog("wpakey: passphrase must be between "
-              "8 and 63 characters");
-    if (nwid.i_len == 0)
-        XYLog("wpakey: nwid not set");
-    pbkdf2_sha1(pwd, (const uint8_t*)ssid, nwid.i_len, 4096,
-                psk.i_psk, 32);
-    psk.i_enabled = 1;
-    if (psk.i_enabled) {
-        ic->ic_flags |= IEEE80211_F_PSK;
-        memcpy(ic->ic_psk, psk.i_psk, sizeof(ic->ic_psk));
-        if (ic->ic_flags & IEEE80211_F_WEPON)
-            ieee80211_disable_wep(ic);
+    if (strlen(pwd) == 0) {
+        memcpy(nwid.i_nwid, ssid, 32);
+        nwid.i_len = strlen((char *)nwid.i_nwid);
+        memset(ic->ic_des_essid, 0, IEEE80211_NWID_LEN);
+        ic->ic_des_esslen = nwid.i_len;
+        memcpy(ic->ic_des_essid, nwid.i_nwid, nwid.i_len);
+        if (ic->ic_des_esslen > 0) {
+            /* 'nwid' disables auto-join magic */
+            ic->ic_flags &= ~IEEE80211_F_AUTO_JOIN;
+        } else if (!TAILQ_EMPTY(&ic->ic_ess)) {
+            /* '-nwid' re-enables auto-join */
+            ic->ic_flags |= IEEE80211_F_AUTO_JOIN;
+        }
+        /* disable WPA/WEP */
+        ieee80211_disable_rsn(ic);
+        ieee80211_disable_wep(ic);
     } else {
-        ic->ic_flags &= ~IEEE80211_F_PSK;
-        memset(ic->ic_psk, 0, sizeof(ic->ic_psk));
+        memset(&psk, 0, sizeof(psk));
+        memcpy(nwid.i_nwid, ssid, 32);
+        nwid.i_len = strlen((char *)nwid.i_nwid);
+        memset(ic->ic_des_essid, 0, IEEE80211_NWID_LEN);
+        ic->ic_des_esslen = nwid.i_len;
+        memcpy(ic->ic_des_essid, nwid.i_nwid, nwid.i_len);
+        if (ic->ic_des_esslen > 0) {
+            /* 'nwid' disables auto-join magic */
+            ic->ic_flags &= ~IEEE80211_F_AUTO_JOIN;
+        } else if (!TAILQ_EMPTY(&ic->ic_ess)) {
+            /* '-nwid' re-enables auto-join */
+            ic->ic_flags |= IEEE80211_F_AUTO_JOIN;
+        }
+        /* disable WPA/WEP */
+        ieee80211_disable_rsn(ic);
+        ieee80211_disable_wep(ic);
+        size_t passlen = strlen(pwd);
+        /* Parse a WPA passphrase */
+        if (passlen < 8 || passlen > 63)
+            XYLog("wpakey: passphrase must be between "
+                  "8 and 63 characters");
+        if (nwid.i_len == 0)
+            XYLog("wpakey: nwid not set");
+        pbkdf2_sha1(pwd, (const uint8_t*)ssid, nwid.i_len, 4096,
+                    psk.i_psk, 32);
+        psk.i_enabled = 1;
+        if (psk.i_enabled) {
+            ic->ic_flags |= IEEE80211_F_PSK;
+            memcpy(ic->ic_psk, psk.i_psk, sizeof(ic->ic_psk));
+            if (ic->ic_flags & IEEE80211_F_WEPON)
+                ieee80211_disable_wep(ic);
+        } else {
+            ic->ic_flags &= ~IEEE80211_F_PSK;
+            memset(ic->ic_psk, 0, sizeof(ic->ic_psk));
+        }
+        memset(&wpa, 0, sizeof(wpa));
+        ieee80211_ioctl_getwpaparms(ic, &wpa);
+        wpa.i_enabled = psk.i_enabled;
+        wpa.i_ciphers = 0;
+        wpa.i_groupcipher = 0;
+        wpa.i_protos = IEEE80211_WPA_PROTO_WPA1 | IEEE80211_WPA_PROTO_WPA2;
+        wpa.i_akms = IEEE80211_WPA_AKM_PSK | IEEE80211_WPA_AKM_8021X | IEEE80211_WPA_AKM_SHA256_PSK | IEEE80211_WPA_AKM_SHA256_8021X;
+        ieee80211_ioctl_setwpaparms(ic, &wpa);
     }
-    memset(&wpa, 0, sizeof(wpa));
-    ieee80211_ioctl_getwpaparms(ic, &wpa);
-    wpa.i_enabled = psk.i_enabled;
-    wpa.i_ciphers = 0;
-    wpa.i_groupcipher = 0;
-    wpa.i_protos = IEEE80211_WPA_PROTO_WPA1 | IEEE80211_WPA_PROTO_WPA2;
-    wpa.i_akms = IEEE80211_WPA_AKM_PSK | IEEE80211_WPA_AKM_8021X | IEEE80211_WPA_AKM_SHA256_PSK | IEEE80211_WPA_AKM_SHA256_8021X;
-    ieee80211_ioctl_setwpaparms(ic, &wpa);
     ieee80211_del_ess(ic, NULL, 0, 1);
     iwx_add_task(&com, systq, &com.init_task);
 }
@@ -252,6 +270,13 @@ bool itlwmx::start(IOService *provider)
     device->setIOEnable(true);
     device->setMemoryEnable(true);
     device->configWrite8(0x41, 0);
+    if (device->requestPowerDomainState(kIOPMPowerOn,
+                                        (IOPowerConnection *) getParentEntry(gIOPowerPlane), IOPMLowestState) != IOPMNoErr) {
+        return false;
+    }
+    if (initPCIPowerManagment(device) == false) {
+        return false;
+    }
     _fWorkloop = getWorkLoop();
     _fCommandGate = IOCommandGate::commandGate(this, (IOCommandGate::Action)tsleepHandler);
     if (_fCommandGate == 0) {
@@ -278,13 +303,18 @@ bool itlwmx::start(IOService *provider)
         releaseAll();
         return false;
     }
+    fWatchdogWorkLoop = IOWorkLoop::workLoop();
+    if (fWatchdogWorkLoop == NULL) {
+        releaseAll();
+        return false;
+    }
     watchdogTimer = IOTimerEventSource::timerEventSource(this, OSMemberFunctionCast(IOTimerEventSource::Action, this, &itlwmx::watchdogAction));
     if (!watchdogTimer) {
         XYLog("init watchdog fail\n");
         releaseAll();
         return false;
     }
-    _fWorkloop->addEventSource(watchdogTimer);
+    fWatchdogWorkLoop->addEventSource(watchdogTimer);
     setLinkStatus(kIONetworkLinkValid);
     OSObject *wifiEntryObject = NULL;
     OSDictionary *wifiEntry = NULL;
@@ -312,6 +342,42 @@ bool itlwmx::start(IOService *provider)
     }
     registerService();
     fNetIf->registerService();
+    return true;
+}
+
+const OSString * itlwmx::newVendorString() const
+{
+    return OSString::withCString("Apple");
+}
+
+const OSString * itlwmx::newModelString() const
+{
+    return OSString::withCString("Intel Wireless Card");
+}
+
+bool itlwmx::initPCIPowerManagment(IOPCIDevice *provider)
+{
+    UInt16 reg16;
+
+    reg16 = provider->configRead16(kIOPCIConfigCommand);
+
+    reg16 |= ( kIOPCICommandBusMaster       |
+               kIOPCICommandMemorySpace     |
+               kIOPCICommandMemWrInvalidate );
+
+    reg16 &= ~kIOPCICommandIOSpace;  // disable I/O space
+
+    provider->configWrite16( kIOPCIConfigCommand, reg16 );
+    provider->findPCICapability(kIOPCIPowerManagementCapability,
+                                &pmPCICapPtr);
+    if (pmPCICapPtr) {
+        UInt16 pciPMCReg = provider->configRead32( pmPCICapPtr ) >> 16;
+        if (pciPMCReg & kPCIPMCPMESupportFromD3Cold) {
+            magicPacketSupported = true;
+        }
+        provider->configWrite16((pmPCICapPtr + 4), 0x8000 );
+        IOSleep(10);
+    }
     return true;
 }
 
@@ -384,11 +450,13 @@ void itlwmx::releaseAll()
             _fCommandGate->release();
             _fCommandGate = NULL;
         }
-        if (watchdogTimer) {
+        if (fWatchdogWorkLoop && watchdogTimer) {
             watchdogTimer->cancelTimeout();
-            _fWorkloop->removeEventSource(watchdogTimer);
+            fWatchdogWorkLoop->removeEventSource(watchdogTimer);
             watchdogTimer->release();
             watchdogTimer = NULL;
+            fWatchdogWorkLoop->release();
+            fWatchdogWorkLoop = NULL;
         }
         _fWorkloop->release();
         _fWorkloop = NULL;
@@ -403,7 +471,6 @@ IOReturn itlwmx::enable(IONetworkInterface *netif)
     ifp->if_flags |= IFF_UP;
     _fCommandGate->enable();
     iwx_activate(&com, DVACT_WAKEUP);
-    setLinkStatus(kIONetworkLinkValid | kIONetworkLinkActive, getCurrentMedium());
     watchdogTimer->setTimeoutMS(1000);
     watchdogTimer->enable();
     return kIOReturnSuccess;
@@ -472,9 +539,145 @@ IOReturn itlwmx::setMulticastList(IOEthernetAddress* addr, UInt32 len) {
 }
 
 IOReturn itlwmx::getMaxPacketSize(UInt32 *maxSize) const {
-    IOReturn ret = super::getMaxPacketSize(maxSize);
-    XYLog("%s maxsize=%d\n", __FUNCTION__, *maxSize);
+    return super::getMaxPacketSize(maxSize);
+}
+
+IOReturn itlwmx::getPacketFilters(const OSSymbol *group, UInt32 *filters) const {
+    IOReturn    rtn = kIOReturnSuccess;
+    if (group == gIOEthernetWakeOnLANFilterGroup && magicPacketSupported) {
+        *filters = kIOEthernetWakeOnMagicPacket;
+    } else if (group == gIONetworkFilterGroup) {
+        *filters = kIOPacketFilterUnicast | kIOPacketFilterBroadcast
+        | kIOPacketFilterPromiscuous | kIOPacketFilterMulticast
+        | kIOPacketFilterMulticastAll;
+    } else {
+        rtn = IOEthernetController::getPacketFilters(group, filters);
+    }
+    return rtn;
+}
+
+static IOPMPowerState powerStateArray[kPowerStateCount] =
+{
+    {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    {1, kIOPMDeviceUsable, kIOPMPowerOn, kIOPMPowerOn, 0, 0, 0, 0, 0, 0, 0, 0}
+};
+
+void itlwmx::unregistPM()
+{
+    if (powerOffThreadCall) {
+        thread_call_free(powerOffThreadCall);
+        powerOffThreadCall = NULL;
+    }
+    if (powerOnThreadCall) {
+        thread_call_free(powerOnThreadCall);
+        powerOnThreadCall = NULL;
+    }
+}
+
+IOReturn itlwmx::setPowerState(unsigned long powerStateOrdinal, IOService *policyMaker)
+{
+    IOReturn result = IOPMAckImplied;
+    
+    if (pmPowerState == powerStateOrdinal) {
+        return result;
+    }
+    switch (powerStateOrdinal) {
+        case kPowerStateOff:
+            if (powerOffThreadCall) {
+                retain();
+                if (thread_call_enter(powerOffThreadCall)) {
+                    release();
+                }
+                result = 5000000;
+            }
+            break;
+        case kPowerStateOn:
+            if (powerOnThreadCall) {
+                retain();
+                if (thread_call_enter(powerOnThreadCall)) {
+                    release();
+                }
+                result = 5000000;
+            }
+            break;
+            
+        default:
+            break;
+    }
+    return result;
+}
+
+IOReturn itlwmx::setWakeOnMagicPacket(bool active)
+{
+    magicPacketEnabled = active;
+    return kIOReturnSuccess;
+}
+
+static void handleSetPowerStateOff(thread_call_param_t param0,
+                             thread_call_param_t param1)
+{
+    itlwmx *self = (itlwmx *)param0;
+
+    if (param1 == 0)
+    {
+        self->getCommandGate()->runAction((IOCommandGate::Action)
+                                           handleSetPowerStateOff,
+                                           (void *) 1);
+    }
+    else
+    {
+        self->setPowerStateOff();
+        self->release();
+    }
+}
+
+static void handleSetPowerStateOn(thread_call_param_t param0,
+                            thread_call_param_t param1)
+{
+    itlwmx *self = (itlwmx *) param0;
+
+    if (param1 == 0)
+    {
+        self->getCommandGate()->runAction((IOCommandGate::Action)
+                                           handleSetPowerStateOn,
+                                           (void *) 1);
+    }
+    else
+    {
+        self->setPowerStateOn();
+        self->release();
+    }
+}
+
+IOReturn itlwmx::registerWithPolicyMaker(IOService *policyMaker)
+{
+    IOReturn ret;
+    
+    pmPowerState = kPowerStateOn;
+    pmPolicyMaker = policyMaker;
+    
+    powerOffThreadCall = thread_call_allocate(
+                                            (thread_call_func_t)handleSetPowerStateOff,
+                                            (thread_call_param_t)this);
+    powerOnThreadCall  = thread_call_allocate(
+                                            (thread_call_func_t)handleSetPowerStateOn,
+                                              (thread_call_param_t)this);
+    ret = pmPolicyMaker->registerPowerDriver(this,
+                                             powerStateArray,
+                                             kPowerStateCount);
     return ret;
+}
+
+void itlwmx::setPowerStateOff()
+{
+    pmPowerState = kPowerStateOff;
+    pmPolicyMaker->acknowledgeSetPowerState();
+}
+
+void itlwmx::setPowerStateOn()
+{
+    pmPowerState = kPowerStateOn;
+    pmPolicyMaker->acknowledgeSetPowerState();
 }
 
 void itlwmx::watchdogAction(IOTimerEventSource *timer)
@@ -1012,7 +1215,7 @@ iwx_ctxt_info_init(struct iwx_softc *sc, const struct iwx_fw_sects *fws)
     ctxt_info->hcmd_cfg.cmd_queue_addr =
     htole64(sc->txq[IWX_DQA_CMD_QUEUE].desc_dma.paddr);
     ctxt_info->hcmd_cfg.cmd_queue_size =
-    IWX_TFD_QUEUE_CB_SIZE(IWX_CMD_QUEUE_SIZE);
+    IWX_TFD_QUEUE_CB_SIZE(IWX_TX_RING_COUNT);
     
     /* allocate ucode sections in dram and set addresses */
     err = iwx_init_fw_sec(sc, fws, &ctxt_info->dram);
@@ -1196,7 +1399,7 @@ iwx_read_firmware(struct iwx_softc *sc)
     fw->fw_rawdata = malloc(fwData->getLength(), 1, 1);
     memcpy(fw->fw_rawdata, (u_char*)fwData->getBytesNoCopy(), fwData->getLength());
     fw->fw_rawsize = fwData->getLength();
-    XYLog("load firmware done\n");
+    XYLog("load firmware %s done\n", sc->sc_fwname);
     
     sc->sc_capaflags = 0;
     sc->sc_capa_n_scan_channels = IWX_DEFAULT_SCAN_CHANNELS;
@@ -1908,20 +2111,15 @@ iwx_alloc_tx_ring(struct iwx_softc *sc, struct iwx_tx_ring *ring, int qid)
 {
     bus_addr_t paddr;
     bus_size_t size;
-    int i, err, qlen;
+    int i, err;
     
     ring->qid = qid;
     ring->queued = 0;
     ring->cur = 0;
     ring->tail = 0;
     
-    if (qid == IWX_DQA_CMD_QUEUE)
-        qlen = IWX_CMD_QUEUE_SIZE;
-    else
-        qlen = IWX_TX_RING_COUNT;
-    
     /* Allocate TX descriptors (256-byte aligned). */
-    size = qlen * sizeof (struct iwx_tfh_tfd);
+    size = IWX_TX_RING_COUNT * sizeof (struct iwx_tfh_tfd);
     err = iwx_dma_contig_alloc(sc->sc_dmat, &ring->desc_dma, size, 256);
     if (err) {
         XYLog("%s: could not allocate TX ring DMA memory\n",
@@ -1954,7 +2152,7 @@ iwx_alloc_tx_ring(struct iwx_softc *sc, struct iwx_tx_ring *ring, int qid)
         goto fail;
     }
     
-    size = qlen * sizeof(struct iwx_device_cmd);
+    size = IWX_TX_RING_COUNT * sizeof(struct iwx_device_cmd);
     err = iwx_dma_contig_alloc(sc->sc_dmat, &ring->cmd_dma, size,
                                IWX_FIRST_TB_SIZE_ALIGN);
     if (err) {
@@ -1964,7 +2162,7 @@ iwx_alloc_tx_ring(struct iwx_softc *sc, struct iwx_tx_ring *ring, int qid)
     ring->cmd = (struct iwx_device_cmd*)ring->cmd_dma.vaddr;
     
     paddr = ring->cmd_dma.paddr;
-    for (i = 0; i < qlen; i++) {
+    for (i = 0; i < IWX_TX_RING_COUNT; i++) {
         struct iwx_tx_data *data = &ring->data[i];
         size_t mapsize;
         
@@ -1996,14 +2194,9 @@ fail:    iwx_free_tx_ring(sc, ring);
 void itlwmx::
 iwx_reset_tx_ring(struct iwx_softc *sc, struct iwx_tx_ring *ring)
 {
-    int i, qlen;
+    int i;
     
-    if (ring->qid == IWX_DQA_CMD_QUEUE)
-        qlen = IWX_CMD_QUEUE_SIZE;
-    else
-        qlen = IWX_TX_RING_COUNT;
-    
-    for (i = 0; i < qlen; i++) {
+    for (i = 0; i < IWX_TX_RING_COUNT; i++) {
         struct iwx_tx_data *data = &ring->data[i];
         
         if (data->m != NULL) {
@@ -2031,18 +2224,13 @@ iwx_reset_tx_ring(struct iwx_softc *sc, struct iwx_tx_ring *ring)
 void itlwmx::
 iwx_free_tx_ring(struct iwx_softc *sc, struct iwx_tx_ring *ring)
 {
-    int i, qlen;
+    int i;
     
     iwx_dma_contig_free(&ring->desc_dma);
     iwx_dma_contig_free(&ring->cmd_dma);
     iwx_dma_contig_free(&ring->bc_tbl);
     
-    if (ring->qid == IWX_DQA_CMD_QUEUE)
-        qlen = IWX_CMD_QUEUE_SIZE;
-    else
-        qlen = IWX_TX_RING_COUNT;
-    
-    for (i = 0; i < qlen; i++) {
+    for (i = 0; i < IWX_TX_RING_COUNT; i++) {
         struct iwx_tx_data *data = &ring->data[i];
         
         if (data->m != NULL) {
@@ -4194,7 +4382,7 @@ iwx_send_cmd(struct iwx_softc *sc, struct iwx_host_cmd *hcmd)
     /* Kick command ring. */
     DPRINTF(("%s: sending command 0x%x\n", __func__, code));
     ring->queued++;
-    ring->cur = (ring->cur + 1) % IWX_CMD_QUEUE_SIZE;
+    ring->cur = (ring->cur + 1) % IWX_TX_RING_COUNT;
     IWX_WRITE(sc, IWX_HBUS_TARG_WRPTR, ring->qid << 16 | ring->cur);
     
     if (!async) {
@@ -6524,11 +6712,11 @@ iwx_endscan(struct iwx_softc *sc)
     
     struct ieee80211_node *ni, *nextbs;
     
-    ni = RB_MIN(ieee80211_tree, &ic->ic_tree);
-    for (; ni != NULL; ni = nextbs) {
-        nextbs = RB_NEXT(ieee80211_tree, &ic->ic_tree, ni);
-        XYLog("%s scan_result ssid=%s, bssid=%s, ni_rsnciphers=%d, ni_rsncipher=%d, ni_rsngroupmgmtcipher=%d, ni_rsngroupcipher=%d, ni_rssi=%d,  ni_capinfo=%d, ni_intval=%d, ni_rsnakms=%d, ni_supported_rsnakms=%d, ni_rsnprotos=%d, ni_supported_rsnprotos=%d, ni_rstamp=%d\n", __FUNCTION__, ni->ni_essid, ether_sprintf(ni->ni_bssid), ni->ni_rsnciphers, ni->ni_rsncipher, ni->ni_rsngroupmgmtcipher, ni->ni_rsngroupcipher, ni->ni_rssi, ni->ni_capinfo, ni->ni_intval, ni->ni_rsnakms, ni->ni_supported_rsnakms, ni->ni_rsnprotos, ni->ni_supported_rsnprotos, ni->ni_rstamp);
-    }
+//    ni = RB_MIN(ieee80211_tree, &ic->ic_tree);
+//    for (; ni != NULL; ni = nextbs) {
+//        nextbs = RB_NEXT(ieee80211_tree, &ic->ic_tree, ni);
+//        XYLog("%s scan_result ssid=%s, bssid=%s, ni_rsnciphers=%d, ni_rsncipher=%d, ni_rsngroupmgmtcipher=%d, ni_rsngroupcipher=%d, ni_rssi=%d,  ni_capinfo=%d, ni_intval=%d, ni_rsnakms=%d, ni_supported_rsnakms=%d, ni_rsnprotos=%d, ni_supported_rsnprotos=%d, ni_rstamp=%d\n", __FUNCTION__, ni->ni_essid, ether_sprintf(ni->ni_bssid), ni->ni_rsnciphers, ni->ni_rsncipher, ni->ni_rsngroupmgmtcipher, ni->ni_rsngroupcipher, ni->ni_rssi, ni->ni_capinfo, ni->ni_intval, ni->ni_rsnakms, ni->ni_supported_rsnakms, ni->ni_rsnprotos, ni->ni_supported_rsnprotos, ni->ni_rstamp);
+//    }
     
     if ((sc->sc_flags & (IWX_FLAG_SCANNING | IWX_FLAG_BGSCAN)) == 0)
         return;
@@ -8493,10 +8681,7 @@ iwx_attach(struct iwx_softc *sc, struct pci_attach_args *pa)
     task_set(&sc->htprot_task, iwx_htprot_task, sc, "iwx_htprot_task");
     
     ic->ic_node_alloc = iwx_node_alloc;
-#ifdef notyet
-    /* TODO: background scans trigger firmware errors */
     ic->ic_bgscan_start = iwx_bgscan;
-#endif
     ic->ic_set_key = iwx_set_key;
     ic->ic_delete_key = iwx_delete_key;
     

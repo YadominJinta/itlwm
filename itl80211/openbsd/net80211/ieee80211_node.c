@@ -1127,30 +1127,30 @@ ieee80211_match_bss(struct ieee80211com *ic, struct ieee80211_node *ni,
     }
     
     if (ic->ic_if.if_flags & IFF_DEBUG) {
-        XYLog("%s: %c %s%c", ic->ic_if.if_xname, fail ? '-' : '+',
+        DPRINTF(("%s: %c %s%c", ic->ic_if.if_xname, fail ? '-' : '+',
               ether_sprintf(ni->ni_bssid),
-              fail & IEEE80211_NODE_ASSOCFAIL_BSSID ? '!' : ' ');
-        XYLog(" %3d%c", ieee80211_chan2ieee(ic, ni->ni_chan),
-              fail & IEEE80211_NODE_ASSOCFAIL_CHAN ? '!' : ' ');
-        XYLog(" %+4d", ni->ni_rssi);
-        XYLog(" %2dM%c", (rate & IEEE80211_RATE_VAL) / 2,
-              fail & IEEE80211_NODE_ASSOCFAIL_BASIC_RATE ? '!' : ' ');
-        XYLog(" %4s%c",
+              fail & IEEE80211_NODE_ASSOCFAIL_BSSID ? '!' : ' '));
+        DPRINTF((" %3d%c", ieee80211_chan2ieee(ic, ni->ni_chan),
+              fail & IEEE80211_NODE_ASSOCFAIL_CHAN ? '!' : ' '));
+        DPRINTF((" %+4d", ni->ni_rssi));
+        DPRINTF((" %2dM%c", (rate & IEEE80211_RATE_VAL) / 2,
+              fail & IEEE80211_NODE_ASSOCFAIL_BASIC_RATE ? '!' : ' '));
+        DPRINTF((" %4s%c",
               (ni->ni_capinfo & IEEE80211_CAPINFO_ESS) ? "ess" :
               (ni->ni_capinfo & IEEE80211_CAPINFO_IBSS) ? "ibss" :
               "????",
-              fail & IEEE80211_NODE_ASSOCFAIL_IBSS ? '!' : ' ');
-        XYLog(" %7s%c ",
+              fail & IEEE80211_NODE_ASSOCFAIL_IBSS ? '!' : ' '));
+        DPRINTF((" %7s%c ",
               (ni->ni_capinfo & IEEE80211_CAPINFO_PRIVACY) ?
               "privacy" : "no",
-              fail & IEEE80211_NODE_ASSOCFAIL_PRIVACY ? '!' : ' ');
-        XYLog(" %3s%c ",
+              fail & IEEE80211_NODE_ASSOCFAIL_PRIVACY ? '!' : ' '));
+        DPRINTF((" %3s%c ",
               (ic->ic_flags & IEEE80211_F_RSNON) ?
               "rsn" : "no",
-              fail & IEEE80211_NODE_ASSOCFAIL_WPA_PROTO ? '!' : ' ');
+              fail & IEEE80211_NODE_ASSOCFAIL_WPA_PROTO ? '!' : ' '));
         ieee80211_print_essid(ni->ni_essid, ni->ni_esslen);
-        XYLog("%s\n",
-              fail & IEEE80211_NODE_ASSOCFAIL_ESSID ? "!" : "");
+        DPRINTF(("%s\n",
+              fail & IEEE80211_NODE_ASSOCFAIL_ESSID ? "!" : ""));
     }
     
     /* We don't care about unrelated networks during background scans. */
@@ -1305,7 +1305,6 @@ ieee80211_node_choose_bss(struct ieee80211com *ic, int bgscan,
     ni = RB_MIN(ieee80211_tree, &ic->ic_tree);
     
     for (; ni != NULL; ni = nextbs) {
-        XYLog("%s nextbs\n", __FUNCTION__);
         nextbs = RB_NEXT(ieee80211_tree, &ic->ic_tree, ni);
         if (ni->ni_fails) {
             /*
@@ -1315,7 +1314,7 @@ ieee80211_node_choose_bss(struct ieee80211com *ic, int bgscan,
              */
             if (ni->ni_fails++ > 2)
                 ieee80211_free_node(ic, ni);
-            XYLog("%s ni->ni_fails==TRUE\n", __FUNCTION__);
+            DPRINTF(("%s ni->ni_fails==TRUE\n", __FUNCTION__));
             continue;
         }
         
@@ -1324,7 +1323,7 @@ ieee80211_node_choose_bss(struct ieee80211com *ic, int bgscan,
         
         int fail = ieee80211_match_bss(ic, ni, bgscan);
         if (fail != 0) {
-            XYLog("%s ieee80211_match_bss==FALSE, ssid=%s, bssid=%s, %d\n", __FUNCTION__, ni->ni_essid, ether_sprintf(ni->ni_bssid), fail);
+            DPRINTF(("%s ieee80211_match_bss==FALSE, ssid=%s, bssid=%s, %d\n", __FUNCTION__, ni->ni_essid, ether_sprintf(ni->ni_bssid), fail));
             continue;
         }
         
