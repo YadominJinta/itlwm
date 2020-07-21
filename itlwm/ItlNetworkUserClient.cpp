@@ -125,7 +125,7 @@ sSTA_INFO(OSObject* target, void* data, bool isSet)
     //TODO only support 20mhz band width now
     st->band_width = 20;
     st->rssi = -(0 - IWM_MIN_DBM - ic_bss->ni_rssi);
-    st->noise = 0;
+    st->noise = that->fSoft->sc_noise;
     st->rate = ic_bss->ni_rates.rs_rates[ic_bss->ni_txrate];
     memset(st->ssid, 0, sizeof(st->ssid));
     bcopy(ic->ic_des_essid, st->ssid, ic->ic_des_esslen);
@@ -197,6 +197,7 @@ sDISASSOCIATE(OSObject* target, void* data, bool isSet)
     struct ieee80211com *ic = &that->fSoft->sc_ic;
     that->fDriver->iwm_stop(&ic->ic_ac.ac_if);
     ieee80211_del_ess(ic, (char *)dis->ssid, strlen((char *)dis->ssid), 0);
+    ieee80211_deselect_ess(&that->fSoft->sc_ic);
     that->fDriver->iwm_add_task(that->fSoft, systq, &that->fSoft->init_task);
     return kIOReturnSuccess;
 }
@@ -214,11 +215,7 @@ IOReturn ItlNetworkUserClient::
 sSCAN(OSObject* target, void* data, bool isSet)
 {
     ItlNetworkUserClient *that = OSDynamicCast(ItlNetworkUserClient, target);
-    struct ieee80211com *ic = &that->fSoft->sc_ic;
-    if (that->fSoft->sc_ic.ic_state == IEEE80211_S_RUN) {
-        //TODO need to scan all of the channels.
-//        timeout_add_usec(&ic->ic_bgscan_timeout, 1);
-    }
+    ieee80211_begin_cache_bgscan(that->fIfp);
     return kIOReturnSuccess;
 }
 
